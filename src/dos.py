@@ -33,7 +33,7 @@ block_list = [] # dictionary ip->AttackRecord mapping
 # record class containing detection information for one IP
 class AttackRecord:
 
-    def __init__(self, ip_address: str, port: int, str: time):
+    def __init__(self, ip_address: tuple, port: tuple, str: time):
         self.ip = ip_address
         self.ports = [port]
         self.timestamps = [time]
@@ -59,6 +59,26 @@ class AttackRecord:
 # returns a dictionary containing the packet protocol/type, ip, port, and time seen
 def get_basic_deets(packet) -> dict:
     collect = {}
+
+    if packet.haslayer(IP): # attack within scope
+        collect['timestamp'] = packet.time
+        iplayer = packet[IP]
+        collect['ip'] = (iplayer.src, iplayer.dst)
+        collect['protocol'] = iplayer.proto
+
+    if packet.haslayer(TCP): #syn flood possible
+        tcplayer = packet[TCP]
+        collect['port'] = (tcplayer.sport, tcplayer.dport)
+    elif packet.haslayer[UDP]: #udp flood possible
+        udplayer = packet[UDP]
+        collect['port'] = (udplayer.sport, udplayer.dport)
+    elif packet.haslayer[ICMP]: # icmp ping flood possible
+        if packet.haslayer[UDPerror]:
+            udpinicmplayer = packet[UDPerror]
+            collect['port'] = (udpinicmplayer.sport, udpinicmplayer.dport)
+        else:
+            collect['port'] = ('','') #no port is fine
+
     return collect
 
 # return true if packet exhibits behavior of udp flood
@@ -92,7 +112,8 @@ for packet in pcap:
         if p_details['protocol'] == 'udp':
             if check_udp(packet):
                 block_list.append({p_details['ip']:placeholder.set_category('UDP Flood')})
-            elif check_icmp(packet):
+        if p_details['protocol'] == 'icmp':
+            if check_icmp(packet):
                 block_list.append({p_details['ip']:placeholder.set_category('ICMP (Ping) Flood')})
         elif p_details['protocol'] == 'tcp':
             if check_syn(packet):
