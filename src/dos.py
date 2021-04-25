@@ -23,7 +23,7 @@
 # No ACK, or inordinary number of SYNs from different IPs within t
 
 from scapy.all import *
-from expiringdict import ExpiringDict
+import oyaml as yaml
 import sys
 
 score_keeper = {} # ip to time mapping
@@ -38,7 +38,8 @@ limit = 3
 # record class containing detection information for one IP
 class AttackRecord:
 
-    def __init__(self, ip_address: tuple, port: tuple, str: time):
+    def __init__(self, mac: tuple, ip_address: tuple, port: tuple, time: str):
+        self.mac = mac
         self.ip = ip_address
         self.ports = [port]
         self.timestamps = [time]
@@ -47,7 +48,7 @@ class AttackRecord:
 
     # add port if not seen before
     def add_port(self, port: int):
-        if not port in self.ports:
+        if not port in self.ports: # specific src-target tuple
             self.ports.append(port)
 
     # add another timestamp and increment number of detections
@@ -60,11 +61,21 @@ class AttackRecord:
     def set_category(self, cat: str):
         if self.category == None:
             self.category = cat
+    def all_unique_ports(self, i: int):
+        temp = []
+        for p in self.ports:
+            temp.append(p[i])
+        return list(set(temp))
 
 # returns a dictionary containing the packet protocol/type, ip, port, and time seen
 def get_basic_deets(packet) -> dict:
     collect = {}
 
+    if packet.haslayer(Ether): # definitely should have but still check
+        maclayer = packet[Ether]
+        collect['mac'] = (maclayer.src, maclayer.dst)
+    else:
+        collect['mac'] = ('', '') # fine but literally how
     if packet.haslayer(IP): # attack within scope
         collect['time'] = packet.time
         iplayer = packet[IP]
@@ -175,17 +186,29 @@ def check_syn(packet, details) -> bool:
 
     return False
 
+def yaml_output():
+    yaml_dump = {}
+    keys = list(block_list.keys())
+    for key in keys:
+        record = block_list[key][0]
+        yaml_dump['start timestamp'] = int(float(str(record.timestamps[0])))
+        yaml_dump['end timestamp'] = int(float(str(record.timestamps[-1])))
+        yaml_dump['source'] = {'mac_address': record.mac[0], 'ipv4_address': record.ip[0], 'ports': str(record.all_unique_ports(0))}
+        yaml_dump['target'] = {'mac_address': record.mac[1], 'ipv4_address': record.ip[1], 'ports': str(record.all_unique_ports(1))}
+        yaml_dump['attack'] = block_list[key][1]
+        print(yaml.dump(yaml_dump)+'---')
+
 # input path to PCAP to get packets as list
 pcap = PcapReader(sys.argv[1])
 
 # run analysis over pcap
 for packet in pcap:
-    p_details = get_basic_deets(packet) # {ip, protocol, port, timestamp}
+    p_details = get_basic_deets(packet) # {mac, ip, protocol, port, timestamp}
     if p_details['ip'][0] in block_list: # update our AttackRecord accordingly
         block_list[p_details['ip'][0]][0].happened_again(p_details['time']) # add new timestamp
         block_list[p_details['ip'][0]][0].add_port(p_details['port']) # offending port or id is updated if it is any different
     else:
-        placeholder = AttackRecord(p_details['ip'], p_details['port'], p_details['time']) # initialize our record object
+        placeholder = AttackRecord(p_details['mac'], p_details['ip'], p_details['port'], p_details['time']) # initialize our record object
         if p_details['protocol'] == 'udp':
             if check_udp(packet, p_details):
                 placeholder.set_category('UDP Flood')
@@ -198,5 +221,7 @@ for packet in pcap:
 
         if placeholder.category != None: # we've parsed the protocol-specific packet and detected something
             block_list[p_details['ip'][0]] = (placeholder, placeholder.category)
+
+yaml_output()
 keys = list(block_list.keys())
-print(block_list[keys[0]][0].occurences)
+#print(block_list[keys[0]][0].timestamps)
