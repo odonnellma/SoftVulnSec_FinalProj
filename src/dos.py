@@ -29,9 +29,12 @@ import sys
 score_keeper = {} # ip to time mapping
 #syn_cache = ExpiringDict(max_len=256, max_age_seconds=60) # we can track up to 256 SYN records within a 10 second period
 syn_cache = {}
-block_list = [] # dictionary ip->AttackRecord mapping
+icmp_cache = {}
+udp_cache = {}
+block_list = {} # dictionary ip->AttackRecord mapping
 timeout = Decimal(0.5)
-backlog = 256 # we can tolerate 256 unanswered connections, really dependent on the functionality of the destination application
+backlog = 5
+limit = 3
 # record class containing detection information for one IP
 class AttackRecord:
 
@@ -67,37 +70,77 @@ def get_basic_deets(packet) -> dict:
         iplayer = packet[IP]
         collect['ip'] = (iplayer.src, iplayer.dst)
         collect['protocol'] = iplayer.get_field('proto').i2s[iplayer.proto]
-
     if packet.haslayer(TCP): #syn flood possible
         tcplayer = packet[TCP]
         collect['port'] = (tcplayer.sport, tcplayer.dport)
-    elif packet.haslayer[UDP]: #udp flood possible
+    elif packet.haslayer(UDP): #udp flood possible
         udplayer = packet[UDP]
         collect['port'] = (udplayer.sport, udplayer.dport)
-    elif packet.haslayer[ICMP]: # icmp ping flood possible
-        if packet.haslayer[UDPerror]:
-            udpinicmplayer = packet[UDPerror]
+    elif packet.haslayer(ICMP): # icmp ping flood possible
+        if packet.haslayer(UDPerror):
+            udpinicmplayer = packet(UDPerror)
             collect['port'] = (udpinicmplayer.sport, udpinicmplayer.dport)
         else:
-            collect['port'] = ('','') #no port is fine
-
+            icmplayer = packet[ICMP]
+            collect['port'] = (icmplayer.id, icmplayer.id) #no port is fine, get ICMP id instea
     return collect
 
 # return true if packet exhibits behavior of udp flood
 def check_udp(packet, details) -> bool:
+    udplayer = packet[UDP]
+    if details['ip'][0] in udp_cache:
+        time = details['time']
+        sport = details['port'][0]
+        record = udp_cache[details['ip'][0]]
+        recent_key = list(record['time_port'].keys())[-1]
+        recent = record['time_port'][recent_key]
+        if time - recent <= timeout:
+            record['count'] += 1
+        record['time_port'][sport] = time
+        if record["count"] >= limit:
+            return True
+    else:
+        udp_cache[details['ip'][0]] = { "time_port": {details['port'][0]: details['time']},
+                                        "count": 1}
     return False
+
+def check_icmp_cache(srcip) -> bool:
+    result = False
+    cached_record = icmp_cache[srcip]['sourceid_count']
+    sources_for_ip = list(cached_record.keys())
+    if len(sources_for_ip) > backlog:
+        results = True
+    else:
+        for key in sources_for_ip:
+            if cached_record[key] >= limit:
+                result = True
+                break
+    return result
 
 # return true if packet exhibits behavior of icmp (ping) flood
 def check_icmp(packet, details) -> bool:
+    #packet.show()
+    if packet[ICMP].get_field('type').i2s[packet[ICMP].type] == 'echo-request': # ping type
+        if details['ip'][0] in icmp_cache: # if already exists, we check the dictionary of different source ports
+            time = details['time']
+            id_or_sport = details['port'][0]
+            record = icmp_cache[details['ip'][0]]
+            if id_or_sport in record['sourceid_count']:
+                record['sourceid_count'][id_or_sport] += 1
+            else:
+                record['sourceid_count'][id_or_sport] = 1
+            # needs to check if size of sourceid_count is over limit(num sports), or count of at least one sport is over limit
+            return check_icmp_cache(details['ip'][0])
+        else:
+            icmp_cache[details['ip'][0]] = { "sourceid_count": {details['port'][0]: 1},
+                                            "count": 1}
     return False
 
 # return true if packet exhibits behavior of syn flood 
 # for a src ip, if this is a SYN packet, check that we've
 # received an ACK back (if we send a SYN-ACK) within timeout
 # tolerate a consistent 20% success rate
-i = 0
 def check_syn(packet, details) -> bool:
-    global i
     tcplayer = packet[TCP]
     if tcplayer.flags == 'S': # SYN from outside
         if details['ip'][0] in syn_cache: # if already exists, check time constraints
@@ -109,11 +152,12 @@ def check_syn(packet, details) -> bool:
             # later see if you can do a range of oldest times and take percentage of that
             if time - oldest >= timeout and record['acks']/record['syns'] < 0.2:
                 record['count'] += 1
-            # still want to store this entry
-            record['time_port'][sport] = time
+            # still want to store this entry but only if it doesn't exist yet
+            if sport not in record['time_port']:
+                record['time_port'][sport] = time
             record['syns'] += 1
-            # check for three strikes
-            if record['count'] == 3:
+            # check if we've reached the limit of unacked syns we can tolerate
+            if record['count'] >= limit:
                 return True
 
         else: # first SYN from this src ip to dest ip
@@ -122,7 +166,7 @@ def check_syn(packet, details) -> bool:
                                             "acks": 0,
                                             "count": 0
                                         }
-    elif tcplayer.flags == 'A': # no questions asked, we'll take it
+    elif tcplayer.flags == 'A': # we'll take take the ack only if it we did receive a syn for it previously
         sport = details['port'][0]
         record = syn_cache[details['ip'][0]]
         if sport in record:
@@ -133,31 +177,26 @@ def check_syn(packet, details) -> bool:
 
 # input path to PCAP to get packets as list
 pcap = PcapReader(sys.argv[1])
-#i = 1
 
 # run analysis over pcap
 for packet in pcap:
-    #if i == 523 or i == 524:
-    #    packet.show()
-    #i += 1
-
     p_details = get_basic_deets(packet) # {ip, protocol, port, timestamp}
-    if p_details['ip'][0] in block_list:
-        block_list[p_details['ip'][0]].happened_again(p_details['time'])
-        block_list[p_details['ip'][0]].add_port(p_details['port'])
+    if p_details['ip'][0] in block_list: # update our AttackRecord accordingly
+        block_list[p_details['ip'][0]][0].happened_again(p_details['time']) # add new timestamp
+        block_list[p_details['ip'][0]][0].add_port(p_details['port']) # offending port or id is updated if it is any different
     else:
-        placeholder = AttackRecord(p_details['ip'], p_details['port'], p_details['time'])
+        placeholder = AttackRecord(p_details['ip'], p_details['port'], p_details['time']) # initialize our record object
         if p_details['protocol'] == 'udp':
             if check_udp(packet, p_details):
                 placeholder.set_category('UDP Flood')
-                block_list.append({p_details['ip']: (placeholder, placeholder.category)})
-        if p_details['protocol'] == 'icmp':
+        elif p_details['protocol'] == 'icmp':
             if check_icmp(packet, p_details):
                 placeholder.set_category('ICMP (Ping) Flood')
-                block_list.append({p_details['ip']: (placeholder, placeholder.category)})
         elif p_details['protocol'] == 'tcp':
             if check_syn(packet, p_details):
                 placeholder.set_category('SYN Flood')
-                block_list.append({p_details['ip']: (placeholder, placeholder.category)})
 
-print(block_list)
+        if placeholder.category != None: # we've parsed the protocol-specific packet and detected something
+            block_list[p_details['ip'][0]] = (placeholder, placeholder.category)
+keys = list(block_list.keys())
+print(block_list[keys[0]][0].occurences)
