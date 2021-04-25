@@ -15,6 +15,10 @@ def arp_cache_poisoning(pkt):
         yaml_dump['target']= {'mac_address': pkt.hwdst, 'ipv4_address': pkt.pdst, 'tcp_port': None}
         yaml_dump['attack']= 'arp_cache_poisoning'
         print(yaml.dump(yaml_dump)+'---')
+    elif pkt.psrc not in arp_tracker:
+        for ip in arp_tracker.keys():
+            if arp_tracker[ip] != pkt.hwsrc:
+                print("HERE")
     arp_tracker[pkt.psrc]= pkt.hwsrc
 
 def tcp_reset_injection(pkt):
