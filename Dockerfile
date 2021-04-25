@@ -14,5 +14,6 @@ RUN apt install netcat -y
 
 #Installing Python3
 RUN apt install python3 -y
+RUN pip install scapy && pip install pyyaml && pip install oyaml
 
 ENTRYPOINT tail -f /dev/null
