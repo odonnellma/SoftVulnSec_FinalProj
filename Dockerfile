@@ -4,6 +4,8 @@ WORKDIR /tmp
 
 ADD /src/main.py .
 ADD /src/dos.py .
+ADD /src/arp_cache_poisoning.py .
+ADD /src/tcp_rst_injection.py .
 
 #RUN apt update -y
 

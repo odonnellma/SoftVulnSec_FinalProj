@@ -3,23 +3,8 @@ from scapy.all import *
 from scapy.layers.inet import IP, TCP
 import sys
 
-arp_tracker = {}
-tcp_tracker = {}
-
-# Takes in a packet, checks if that IP/ MAC Address has been previously mapped
-def arp_cache_poisoning(pkt):
-    yaml_dump= {}
-    if pkt.psrc in arp_tracker and pkt.hwsrc != arp_tracker[pkt.psrc]:          # In ARP, the pkt.hwsrc is used to denote the address that was being looked for
-        print_packet(pkt, "arp_cache_poisoning")
-    elif pkt.psrc not in arp_tracker.keys():
-        for ip in arp_tracker.keys():
-            if arp_tracker[ip] == pkt.hwsrc:
-                print_packet(pkt, "arp_cache_poisoning")
-    arp_tracker[pkt.psrc]= pkt.hwsrc
-
 # Takes in a packet, checks if a RST was sent and data packets were sent after the RST
 def tcp_reset_injection(pkt):
-    yaml_dump= {}
     # Looking for more packets sent by an endpoint AFTER a RST is sent or a RST packet with a lower SEQ than other data packets
     # out of order seq numbers?
     tcp_tracker[get_conn_tuple_tcp(pkt)] = pkt
@@ -45,7 +30,7 @@ def tcp_reset_injection(pkt):
 def get_conn_tuple_tcp(pkt):
     return (pkt.src, pkt.sport, pkt.dst, pkt.dport)
 
-def print_packet(pkt, attack_type):
+def print_packet(pkt, attack_type: str):
     yaml_dump= {}
     yaml_dump['timestamp']= int(pkt.time)
     yaml_dump['source']= {'mac_address': pkt.hwsrc, 'ipv4_address': pkt.psrc, 'tcp_port': None}
@@ -57,10 +42,8 @@ def main():
     packets= rdpcap(sys.argv[1])
 
     for pkt in packets:
-        if 'ARP' in pkt and pkt.op == 2:        # Get only 'is-at' packets that are ARP protocol
-            arp_cache_poisoning(pkt)
         if 'TCP' in pkt:                                
             tcp_reset_injection(pkt)            # Check every TCP packet through algorithm
-        # dos stuff here
+
 if __name__ == "__main__":
     main()
