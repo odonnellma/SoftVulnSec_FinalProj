@@ -8,7 +8,6 @@ tcp_tracker = {}
 
 # Takes in a packet, checks if that IP/ MAC Address has been previously mapped
 def arp_cache_poisoning(pkt):
-    yaml_dump= {}
     if pkt.psrc in arp_tracker and pkt.hwsrc != arp_tracker[pkt.psrc]:          # In ARP, the pkt.hwsrc is used to denote the address that was being looked for
         print_packet(pkt, "arp_cache_poisoning")
     elif pkt.psrc not in arp_tracker.keys():
@@ -19,7 +18,6 @@ def arp_cache_poisoning(pkt):
 
 # Takes in a packet, checks if a RST was sent and data packets were sent after the RST
 def tcp_reset_injection(pkt):
-    yaml_dump= {}
     # Looking for more packets sent by an endpoint AFTER a RST is sent or a RST packet with a lower SEQ than other data packets
     # out of order seq numbers?
     tcp_tracker[get_conn_tuple_tcp(pkt)] = pkt
