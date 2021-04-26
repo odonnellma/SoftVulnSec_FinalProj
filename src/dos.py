@@ -35,7 +35,8 @@ block_list = {} # dictionary ip->AttackRecord mapping
 timeout = Decimal(0.5)
 backlog = 5
 limit = 3
-allowed_ports = ['53', '67', '68', '69', '123', '137', '138', '139', '161', '162', '389', '636']
+allowed_ports = [53, 67, 68, 69, 123, 137, 138, 139, 161, 162, 389, 636]
+#allowed_ports = ['53', '67', '68', '69', '123', '137', '138', '139', '161', '162', '389', '636']
 # record class containing detection information for one IP
 class AttackRecord:
 
@@ -103,7 +104,7 @@ def get_basic_deets(packet) -> dict:
 
 # return true if packet exhibits behavior of udp flood
 def check_udp(packet, details) -> bool:
-    if details['port'][1] not in allowed_ports: # valid udp traffic should not be checked, for instance port 53 for DNS queries/responses
+    if details['port'][0] not in allowed_ports and details['port'][1] not in allowed_ports: # valid udp traffic should not be checked, for instance port 53 for DNS queries/responses
         udplayer = packet[UDP]
         if details['ip'][0] in udp_cache:
             time = details['time']
@@ -235,6 +236,5 @@ for packet in pcap:
         if placeholder.category != None: # we've parsed the protocol-specific packet and detected something
             block_list[p_details['ip'][0]] = (placeholder, placeholder.category)
 
-#yaml_output()
-keys = list(block_list.keys())
-#print(block_list[keys[0]][0].timestamps)
+yaml_output()
+#keys = list(block_list.keys())
