@@ -3,19 +3,6 @@ from scapy.all import *
 from scapy.layers.inet import IP, TCP
 import sys
 
-arp_tracker = {}
-tcp_tracker = {}
-
-# Takes in a packet, checks if that IP/ MAC Address has been previously mapped
-def arp_cache_poisoning(pkt):
-    if pkt.psrc in arp_tracker and pkt.hwsrc != arp_tracker[pkt.psrc]:          # In ARP, the pkt.hwsrc is used to denote the address that was being looked for
-        print_packet(pkt, "arp_cache_poisoning")
-    elif pkt.psrc not in arp_tracker.keys():
-        for ip in arp_tracker.keys():
-            if arp_tracker[ip] == pkt.hwsrc:
-                print_packet(pkt, "arp_cache_poisoning")
-    arp_tracker[pkt.psrc]= pkt.hwsrc
-
 # Takes in a packet, checks if a RST was sent and data packets were sent after the RST
 def tcp_reset_injection(pkt):
     # Looking for more packets sent by an endpoint AFTER a RST is sent or a RST packet with a lower SEQ than other data packets
@@ -55,10 +42,8 @@ def main():
     packets= rdpcap(sys.argv[1])
 
     for pkt in packets:
-        if 'ARP' in pkt and pkt.op == 2:        # Get only 'is-at' packets that are ARP protocol
-            arp_cache_poisoning(pkt)
         if 'TCP' in pkt:                                
             tcp_reset_injection(pkt)            # Check every TCP packet through algorithm
-        # dos stuff here
+
 if __name__ == "__main__":
     main()
