@@ -15,7 +15,7 @@ def arp_cache_poisoning(pkt):
                 print_packet(pkt, "arp_cache_poisoning")
     arp_tracker[pkt.psrc]= pkt.hwsrc
 
-def print_packet(pkt, attack_type):
+def print_packet(pkt, attack_type: str):
     yaml_dump= {}
     yaml_dump['timestamp']= int(pkt.time)
     yaml_dump['source']= {'mac_address': pkt.hwsrc, 'ipv4_address': pkt.psrc, 'tcp_port': None}
@@ -29,6 +29,6 @@ def main():
     for pkt in packets:
         if 'ARP' in pkt and pkt.op == 2:        # Get only 'is-at' packets that are ARP protocol
             arp_cache_poisoning(pkt)
-            
+
 if __name__ == "__main__":
     main()

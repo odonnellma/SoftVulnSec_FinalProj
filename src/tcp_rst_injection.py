@@ -30,7 +30,7 @@ def tcp_reset_injection(pkt):
 def get_conn_tuple_tcp(pkt):
     return (pkt.src, pkt.sport, pkt.dst, pkt.dport)
 
-def print_packet(pkt, attack_type):
+def print_packet(pkt, attack_type: str):
     yaml_dump= {}
     yaml_dump['timestamp']= int(pkt.time)
     yaml_dump['source']= {'mac_address': pkt.hwsrc, 'ipv4_address': pkt.psrc, 'tcp_port': None}
