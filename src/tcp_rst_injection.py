@@ -3,6 +3,8 @@ from scapy.all import *
 from scapy.layers.inet import IP, TCP
 import sys
 
+tcp_tracker = {}
+
 # Takes in a packet, checks if a RST was sent and data packets were sent after the RST
 def tcp_reset_injection(pkt):
     # Looking for more packets sent by an endpoint AFTER a RST is sent or a RST packet with a lower SEQ than other data packets
