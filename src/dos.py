@@ -35,6 +35,7 @@ block_list = {} # dictionary ip->AttackRecord mapping
 timeout = Decimal(0.5)
 backlog = 5
 limit = 3
+allowed_ports = ['53']
 # record class containing detection information for one IP
 class AttackRecord:
 
@@ -89,8 +90,8 @@ def get_basic_deets(packet) -> dict:
     elif packet.haslayer(UDP): #udp flood possible, but also filter out DNS
         udplayer = packet[UDP]
         collect['port'] = (udplayer.sport, udplayer.dport)
-        if packet.haslayer(DNS):
-            collect['protocol'] = 'dns'
+        #if packet.haslayer(DNS):
+        #    collect['protocol'] = 'dns'
     elif packet.haslayer(ICMP): # icmp ping flood possible
         if packet.haslayer(UDPerror):
             udpinicmplayer = packet[UDPerror]
@@ -102,20 +103,21 @@ def get_basic_deets(packet) -> dict:
 
 # return true if packet exhibits behavior of udp flood
 def check_udp(packet, details) -> bool:
-    udplayer = packet[UDP]
-    if details['ip'][0] in udp_cache:
-        time = details['time']
-        sport = details['port'][0]
-        record = udp_cache[details['ip'][0]]
-        recent_key = list(record['time_port'].keys())[-1]
-        recent = record['time_port'][recent_key]
-        if time - recent <= timeout:
-            record['count'] += 1
-        record['time_port'][sport] = time
-        if record["count"] >= limit:
-            return True
-    else:
-        udp_cache[details['ip'][0]] = { "time_port": {details['port'][0]: details['time']},
+    if details['port'][1] not in allowed_ports: # valid udp traffic should not be checked, for instance port 53 for DNS queries/responses
+        udplayer = packet[UDP]
+        if details['ip'][0] in udp_cache:
+            time = details['time']
+            sport = details['port'][0]
+            record = udp_cache[details['ip'][0]]
+            recent_key = list(record['time_port'].keys())[-1]
+            recent = record['time_port'][recent_key]
+            if time - recent <= timeout:
+                record['count'] += 1
+            record['time_port'][sport] = time
+            if record["count"] >= limit:
+                return True
+        else:
+            udp_cache[details['ip'][0]] = { "time_port": {details['port'][0]: details['time']},
                                         "count": 1}
     return False
 
@@ -134,7 +136,6 @@ def check_icmp_cache(srcip) -> bool:
 
 # return true if packet exhibits behavior of icmp (ping) flood
 def check_icmp(packet, details) -> bool:
-    #packet.show()
     if packet[ICMP].get_field('type').i2s[packet[ICMP].type] == 'echo-request': # ping type
         if details['ip'][0] in icmp_cache: # if already exists, we check the dictionary of different source ports
             time = details['time']
