@@ -35,7 +35,7 @@ block_list = {} # dictionary ip->AttackRecord mapping
 timeout = Decimal(0.5)
 backlog = 5
 limit = 3
-allowed_ports = ['53']
+allowed_ports = ['53', '67', '68', '69', '123', '137', '138', '139', '161', '162', '389', '636']
 # record class containing detection information for one IP
 class AttackRecord:
 
