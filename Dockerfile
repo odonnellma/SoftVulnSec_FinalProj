@@ -7,10 +7,10 @@ ADD /src/dos.py .
 ADD /src/arp_cache_poisoning.py .
 ADD /src/tcp_rst_injection.py .
 
-#RUN apt update -y
+RUN apt update -y
 
 # Installing text editors
-RUN apt install vim -y
+#RUN apt install vim -y
 #RUN apt install emacs -y
 #RUN apt install nano -y
 #RUN apt install less -y

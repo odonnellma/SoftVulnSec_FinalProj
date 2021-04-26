@@ -81,15 +81,19 @@ def get_basic_deets(packet) -> dict:
         iplayer = packet[IP]
         collect['ip'] = (iplayer.src, iplayer.dst)
         collect['protocol'] = iplayer.get_field('proto').i2s[iplayer.proto]
+    else: # nope
+        collect['ip'] = ('','')
     if packet.haslayer(TCP): #syn flood possible
         tcplayer = packet[TCP]
         collect['port'] = (tcplayer.sport, tcplayer.dport)
-    elif packet.haslayer(UDP): #udp flood possible
+    elif packet.haslayer(UDP): #udp flood possible, but also filter out DNS
         udplayer = packet[UDP]
         collect['port'] = (udplayer.sport, udplayer.dport)
+        if packet.haslayer(DNS):
+            collect['protocol'] = 'dns'
     elif packet.haslayer(ICMP): # icmp ping flood possible
         if packet.haslayer(UDPerror):
-            udpinicmplayer = packet(UDPerror)
+            udpinicmplayer = packet[UDPerror]
             collect['port'] = (udpinicmplayer.sport, udpinicmplayer.dport)
         else:
             icmplayer = packet[ICMP]
@@ -158,6 +162,8 @@ def check_syn(packet, details) -> bool:
             time = details['time'] # we'll keep on updating the oldest things in the cache
             sport = details['port'][0]
             record = syn_cache[details['ip'][0]]
+            if len(list(record['time_port'].keys())) == 0:
+                return False
             cached_port = next(iter(record['time_port']))
             oldest = record['time_port'][cached_port]
             # later see if you can do a range of oldest times and take percentage of that
@@ -172,6 +178,8 @@ def check_syn(packet, details) -> bool:
                 return True
 
         else: # first SYN from this src ip to dest ip
+            #packet.show()
+            #print(details['ip'])
             syn_cache[details['ip'][0]] = { "time_port": {details['port'][0]: details['time']},
                                             "syns": 1,
                                             "acks": 0,
@@ -179,10 +187,12 @@ def check_syn(packet, details) -> bool:
                                         }
     elif tcplayer.flags == 'A': # we'll take take the ack only if it we did receive a syn for it previously
         sport = details['port'][0]
-        record = syn_cache[details['ip'][0]]
-        if sport in record:
-            record.pop(sport)
-            record['acks'] += 1
+        if details['ip'][0] in syn_cache:
+            #print(syn_cache[details['ip'][0]])
+            record = syn_cache[details['ip'][0]]
+            if sport in record['time_port']:
+                record['time_port'].pop(sport)
+                record['acks'] += 1
 
     return False
 
@@ -204,6 +214,8 @@ pcap = PcapReader(sys.argv[1])
 # run analysis over pcap
 for packet in pcap:
     p_details = get_basic_deets(packet) # {mac, ip, protocol, port, timestamp}
+    if p_details['ip'] == ('',''): # skip because this packet is out of scope
+        continue
     if p_details['ip'][0] in block_list: # update our AttackRecord accordingly
         block_list[p_details['ip'][0]][0].happened_again(p_details['time']) # add new timestamp
         block_list[p_details['ip'][0]][0].add_port(p_details['port']) # offending port or id is updated if it is any different
@@ -222,6 +234,6 @@ for packet in pcap:
         if placeholder.category != None: # we've parsed the protocol-specific packet and detected something
             block_list[p_details['ip'][0]] = (placeholder, placeholder.category)
 
-yaml_output()
+#yaml_output()
 keys = list(block_list.keys())
 #print(block_list[keys[0]][0].timestamps)
