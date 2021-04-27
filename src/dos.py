@@ -210,6 +210,9 @@ def yaml_output():
         yaml_dump['attack'] = block_list[key][1]
         print(yaml.dump(yaml_dump)+'---')
 
+# print start message
+print('Starting DoS detection\n')
+
 # input path to PCAP to get packets as list
 pcap = PcapReader(sys.argv[1])
 
@@ -237,4 +240,4 @@ for packet in pcap:
             block_list[p_details['ip'][0]] = (placeholder, placeholder.category)
 
 yaml_output()
-#keys = list(block_list.keys())
+print('Finished DoS detection\n')
