@@ -236,5 +236,8 @@ for packet in pcap:
         if placeholder.category != None: # we've parsed the protocol-specific packet and detected something
             block_list[p_details['ip'][0]] = (placeholder, placeholder.category)
 
+print('Starting DoS detection\n')
 yaml_output()
+print('Finished DoS detection\n')
+
 #keys = list(block_list.keys())
