@@ -25,10 +25,12 @@ def print_packet(pkt, attack_type: str):
 
 def main():
     packets= rdpcap(sys.argv[1])
-
+    print('Starting ARP cache poisoning detection\n')
     for pkt in packets:
         if 'ARP' in pkt and pkt.op == 2:        # Get only 'is-at' packets that are ARP protocol
             arp_cache_poisoning(pkt)
+    print('Finished ARP cache poisoning detection\n')
+
 
 if __name__ == "__main__":
     main()

@@ -42,10 +42,11 @@ def print_packet(pkt, attack_type: str):
 
 def main():
     packets= rdpcap(sys.argv[1])
-
+    print('Starting TCP RST injection detection\n')
     for pkt in packets:
         if 'TCP' in pkt:                                
             tcp_reset_injection(pkt)            # Check every TCP packet through algorithm
+    print('Finished TCP RST injection detection\n')
 
 if __name__ == "__main__":
     main()
