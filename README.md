@@ -9,21 +9,21 @@ docker build -t image_name .
 ```
 To run the resulting image:  
 ```bash
-docker run -v /path/to/pcaps/pcap_name.pcap:/tmp/pcap_to_scan.pcap image_name /tmp/pcap_to_scan.pcap [OPTIONS]
+docker run -v ${local_pcap_file}:/tmp/pcap_to_test.pcap image_name /tmp/pcap_to_test.pcap [OPTIONS]
 ```
 
 Our OPTIONS include the flag -a for arp cache poisoning detection, -t for tcp reset injection detection, -d for denial of service (flood attacks) detection, or all 3 to run all detection modules on the input pcap.
 The docker argument ```-v``` followed by /local/absolute/path:/path/in/container mounts your local volume to a location inside the container so that the container can access that file. In this case the pcap is shared with the container to be scanned. 
 
-## Flood Detection Example
-These examples are assuming that this repo is located in the home directory of your machine, if it isn't replace ```~``` with the path to the repo.
+## ICMP Flood Detection Example
+These examples are based off of our test pcaps, which we've loaded into the docker container. They are all in the directory /tmp/pcaps/
 Build: 
 ```bash
-docker build -t  .
+docker build -t test .
 ```
 Run: 
 ```bash
-docker run -v ~/SoftVulnSec_Final_Proj/src/pcaps/syn_flood.pcap:/tmp/syn_test.pcap test /tmp/syn_test.pcap -d
+docker run test /tmp/pcaps/icmp_flood.pcap -d
 ```
 
 ## ARP Cache Poisoning Example with All Modules
@@ -33,7 +33,7 @@ docker build -t test .
 ```
 Run: 
 ```bash
-docker run -v /src/pcaps/arp_pcap.pcap:/tmp/arp_test.pcap test /tmp/arp_test.pcap -dat
+docker run test /tmp/pcaps/arp_pcap.pcap -dat
 ```
 
 ## Attacks Detected
