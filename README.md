@@ -6,7 +6,7 @@ To build the docker container:
 To run the resulting image:  
 <docker run -v ${local_test_pcap}:/tmp/${container_test_pcap} ${image_name} /tmp/${container_test_pcap} [OPTIONS]>  
 
-Our OPTIONS include the flag -a for arp cache poisoning detection, -t for tcp reset injection detection, -f for denial of service (flood attacks) detection, or all 3 to run all detection modules on the input pcap. 
+Our OPTIONS include the flag -a for arp cache poisoning detection, -t for tcp reset injection detection, -d for denial of service (flood attacks) detection, or all 3 to run all detection modules on the input pcap. 
 
 ## Flood Detection Example
 Build: <docker build -t test .>  
