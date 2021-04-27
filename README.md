@@ -10,7 +10,11 @@ Our OPTIONS include the flag -a for arp cache poisoning detection, -t for tcp re
 
 ## Flood Detection Example
 Build: <docker build -t test .>  
-Run: <docker run -v /src/pcaps/syn_flood.pcap:/tmp/syn_test.pcap test /tmp/syn_test.pcap -f>
+Run: <docker run -v /src/pcaps/syn_flood.pcap:/tmp/syn_test.pcap test /tmp/syn_test.pcap -d>
+
+## ARP Cache Poisoning Example with All Modules
+Build: <docker build -t test .>
+Run: <docker run -v /src/pcaps/arp_pcap.pcap:/tmp/arp_test.pcap test /tmp/arp_test.pcap -dat>
 
 ## Attacks Detected
 ### ARP Cache Poisoning
