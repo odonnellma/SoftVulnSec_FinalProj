@@ -9,11 +9,11 @@ ADD /src/arp_cache_poisoning.py .
 ADD /src/tcp_rst_injection.py .
 
 # adding test pcaps
-ADD /src/pcaps/arp_pcap.pcap .
-ADD /src/pcaps/arp-poisoning.pcap .
-ADD /src/pcaps/icmp_flood.pcap .
-ADD /src/pcaps/syn_flood.pcap .
-ADD /src/pcaps/udp_flood.pcap .
+ADD /src/pcaps/arp_pcap.pcap ./pcaps/
+ADD /src/pcaps/arp-poisoning.pcap ./pcaps/
+ADD /src/pcaps/icmp_flood.pcap ./pcaps/
+ADD /src/pcaps/syn_flood.pcap ./pcaps/
+ADD /src/pcaps/udp_flood.pcap ./pcaps/
 
 RUN apt update -y
 
