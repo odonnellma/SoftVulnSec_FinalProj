@@ -1,20 +1,37 @@
 # SoftVulnSec_FinalProj
 
 ## Environment Setup
-To build the docker container:  
-<docker build -t ${image_name} .> within the same directory as the Dockerfile.  
+To build the docker container:
+Navigate to the same directory as the Dockerfile
+```bash
+docker build -t ${image_name} .
+```
 To run the resulting image:  
-<docker run -v ${local_test_pcap}:/tmp/${container_test_pcap} ${image_name} /tmp/${container_test_pcap} [OPTIONS]>  
+```bash
+docker run -v ${local_test_pcap}:/tmp/${container_test_pcap} ${image_name} /tmp/${container_test_pcap} [OPTIONS]
+```
 
 Our OPTIONS include the flag -a for arp cache poisoning detection, -t for tcp reset injection detection, -d for denial of service (flood attacks) detection, or all 3 to run all detection modules on the input pcap. 
 
 ## Flood Detection Example
-Build: <docker build -t test .>  
-Run: <docker run -v /src/pcaps/syn_flood.pcap:/tmp/syn_test.pcap test /tmp/syn_test.pcap -d>
+Build: 
+```bash
+docker build -t test .
+```
+Run: 
+```bash
+docker run -v /src/pcaps/syn_flood.pcap:/tmp/syn_test.pcap test /tmp/syn_test.pcap -d
+```
 
 ## ARP Cache Poisoning Example with All Modules
-Build: <docker build -t test .>
-Run: <docker run -v /src/pcaps/arp_pcap.pcap:/tmp/arp_test.pcap test /tmp/arp_test.pcap -dat>
+Build: 
+```bash
+docker build -t test .
+```
+Run: 
+```bash
+docker run -v /src/pcaps/arp_pcap.pcap:/tmp/arp_test.pcap test /tmp/arp_test.pcap -dat
+```
 
 ## Attacks Detected
 ### ARP Cache Poisoning
