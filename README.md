@@ -13,6 +13,7 @@ docker run -v ${local_pcap_file}:/tmp/pcap_to_test.pcap image_name /tmp/pcap_to_
 ```
 
 Our OPTIONS include the flag -a for arp cache poisoning detection, -t for tcp reset injection detection, -d for denial of service (flood attacks) detection, or all 3 to run all detection modules on the input pcap.
+
 The docker argument ```-v``` followed by ${local_absolute_path}:${path_in_container} mounts your local volume to a location inside the container so that the container can access that file if you have a pcap you would like to test.
 
 ## ICMP Flood Detection Example
