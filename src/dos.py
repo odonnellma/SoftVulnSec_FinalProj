@@ -26,8 +26,6 @@ from scapy.all import *
 import oyaml as yaml
 import sys
 
-score_keeper = {} # ip to time mapping
-#syn_cache = ExpiringDict(max_len=256, max_age_seconds=60) # we can track up to 256 SYN records within a 10 second period
 syn_cache = {}
 icmp_cache = {}
 udp_cache = {}
@@ -35,8 +33,8 @@ block_list = {} # dictionary ip->AttackRecord mapping
 timeout = Decimal(0.5)
 backlog = 5
 limit = 3
-allowed_ports = [53, 67, 68, 69, 123, 137, 138, 139, 161, 162, 389, 636]
-#allowed_ports = ['53', '67', '68', '69', '123', '137', '138', '139', '161', '162', '389', '636']
+allowed_ports = [53, 67, 68, 69, 123, 137, 138, 139, 161, 162, 389, 636] # common/known udp ports
+
 # record class containing detection information for one IP
 class AttackRecord:
 
@@ -59,10 +57,14 @@ class AttackRecord:
     def happened_again(self, time: str):
         self.timestamps.append(time)
         self.occurences += 1
-
+    
+    # set the category of this attack, only once
     def set_category(self, cat: str):
         if self.category == None:
             self.category = cat
+
+    # get all the unique source or destination ports stored within the record
+    # if i is 0, source ports else if i is 1, destination ports
     def all_unique_ports(self, i: int):
         temp = []
         for p in self.ports:
@@ -73,7 +75,7 @@ class AttackRecord:
 def get_basic_deets(packet) -> dict:
     collect = {}
 
-    if packet.haslayer(Ether): # definitely should have but still check
+    if packet.haslayer(Ether): # definitely should have layer but still check
         maclayer = packet[Ether]
         collect['mac'] = (maclayer.src, maclayer.dst)
     else:
@@ -83,23 +85,21 @@ def get_basic_deets(packet) -> dict:
         iplayer = packet[IP]
         collect['ip'] = (iplayer.src, iplayer.dst)
         collect['protocol'] = iplayer.get_field('proto').i2s[iplayer.proto]
-    else: # nope
+    else: # not in scope, no ip to track
         collect['ip'] = ('','')
     if packet.haslayer(TCP): #syn flood possible
         tcplayer = packet[TCP]
         collect['port'] = (tcplayer.sport, tcplayer.dport)
-    elif packet.haslayer(UDP): #udp flood possible, but also filter out DNS
+    elif packet.haslayer(UDP): #udp flood possible
         udplayer = packet[UDP]
         collect['port'] = (udplayer.sport, udplayer.dport)
-        #if packet.haslayer(DNS):
-        #    collect['protocol'] = 'dns'
     elif packet.haslayer(ICMP): # icmp ping flood possible
         if packet.haslayer(UDPerror):
             udpinicmplayer = packet[UDPerror]
             collect['port'] = (udpinicmplayer.sport, udpinicmplayer.dport)
         else:
             icmplayer = packet[ICMP]
-            collect['port'] = (icmplayer.id, icmplayer.id) #no port is fine, get ICMP id instea
+            collect['port'] = (icmplayer.id, icmplayer.id) #no port is fine, get ICMP id instead
     return collect
 
 # return true if packet exhibits behavior of udp flood
@@ -122,6 +122,8 @@ def check_udp(packet, details) -> bool:
                                         "count": 1}
     return False
 
+# check if size of source port dictionary is over a limited number or if the size of at least one bunch of
+# records for one source port is over some limit
 def check_icmp_cache(srcip) -> bool:
     result = False
     cached_record = icmp_cache[srcip]['sourceid_count']
@@ -142,11 +144,10 @@ def check_icmp(packet, details) -> bool:
             time = details['time']
             id_or_sport = details['port'][0]
             record = icmp_cache[details['ip'][0]]
-            if id_or_sport in record['sourceid_count']:
+            if id_or_sport in record['sourceid_count']: # we will increment, then check if we've hit a tolerance
                 record['sourceid_count'][id_or_sport] += 1
             else:
                 record['sourceid_count'][id_or_sport] = 1
-            # needs to check if size of sourceid_count is over limit(num sports), or count of at least one sport is over limit
             return check_icmp_cache(details['ip'][0])
         else:
             icmp_cache[details['ip'][0]] = { "sourceid_count": {details['port'][0]: 1},
@@ -180,24 +181,22 @@ def check_syn(packet, details) -> bool:
                 return True
 
         else: # first SYN from this src ip to dest ip
-            #packet.show()
-            #print(details['ip'])
             syn_cache[details['ip'][0]] = { "time_port": {details['port'][0]: details['time']},
                                             "syns": 1,
                                             "acks": 0,
                                             "count": 0
                                         }
-    elif tcplayer.flags == 'A': # we'll take take the ack only if it we did receive a syn for it previously
+    elif tcplayer.flags == 'A': # we'll record the ack only if it we did receive a syn for it previously
         sport = details['port'][0]
         if details['ip'][0] in syn_cache:
-            #print(syn_cache[details['ip'][0]])
             record = syn_cache[details['ip'][0]]
             if sport in record['time_port']:
                 record['time_port'].pop(sport)
                 record['acks'] += 1
-
     return False
 
+# write the report to stdout based off the contents of our block_list
+# where we have been tracking and storing attack records
 def yaml_output():
     yaml_dump = {}
     keys = list(block_list.keys())
@@ -226,18 +225,21 @@ for packet in pcap:
         block_list[p_details['ip'][0]][0].add_port(p_details['port']) # offending port or id is updated if it is any different
     else:
         placeholder = AttackRecord(p_details['mac'], p_details['ip'], p_details['port'], p_details['time']) # initialize our record object
-        if p_details['protocol'] == 'udp':
+        if p_details['protocol'] == 'udp': # a udp flood could be possible
             if check_udp(packet, p_details):
                 placeholder.set_category('UDP Flood')
-        elif p_details['protocol'] == 'icmp':
+        elif p_details['protocol'] == 'icmp': # an icmp flood could be possible
             if check_icmp(packet, p_details):
                 placeholder.set_category('ICMP (Ping) Flood')
-        elif p_details['protocol'] == 'tcp':
+        elif p_details['protocol'] == 'tcp': # a syn flood could be possible
             if check_syn(packet, p_details):
                 placeholder.set_category('SYN Flood')
 
         if placeholder.category != None: # we've parsed the protocol-specific packet and detected something
             block_list[p_details['ip'][0]] = (placeholder, placeholder.category)
 
+# print results
 yaml_output()
+
+# print indicator we've finished
 print('Finished DoS detection\n')
